@@ -126,10 +126,20 @@ static int lept_parse_value(lept_context*c, lept_value* v){
 // string mem freeing
 void lept_free(lept_value* v){
     assert( v != NULL);
-    if (v->type == LEPT_STRING)
+    size_t i;
+    switch (v->type)
+    {
+    case LEPT_STRING:
         free(v->u.s.s);
-    if (v->type == LEPT_ARRAY)
+        break;
+    case LEPT_ARRAY:
+        for(i = 0; i < v->u.a.size; i++)
+            lept_free(&v->u.a.e[i]);
         free(v->u.a.e);
+        break;
+    default:
+        break;
+    }
     v->type = LEPT_NULL;
 }
 
@@ -299,6 +309,7 @@ static int lept_parse_string(lept_context* c, lept_value* v){
 //parse array
 static int lept_parse_array(lept_context*c, lept_value* v){
     size_t size = 0;
+    size_t i;
     int ret;
     EXPECT(c, '[');
     lept_parse_whitespace(c);
@@ -313,14 +324,17 @@ static int lept_parse_array(lept_context*c, lept_value* v){
         lept_value e;
         lept_init(&e);
         if( (ret = lept_parse_value(c, &e) != LEPT_PARSE_OK) ){
-            lept_context_pop(c, size);
-            return ret;
+            // lept_context_pop(c, size);
+            // return ret;
+            break;
         }
         memcpy(lept_context_push(c, sizeof(lept_value)), &e, sizeof(lept_value));
         size++;
         lept_parse_whitespace(c);
-        if(*c->json == ',')
+        if(*c->json == ','){
             c->json++;
+            lept_parse_whitespace(c);
+        }
         else if(*c->json == ']'){
             c->json++;
             v->type = LEPT_ARRAY;
@@ -330,10 +344,15 @@ static int lept_parse_array(lept_context*c, lept_value* v){
             return LEPT_PARSE_OK;
         }
         else{
-            lept_context_pop(c, size);
-            return LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            // lept_context_pop(c, size);
+            // return LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            ret = LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            break;
         }
     }
+    for (i = 0; i < size; i++)
+        lept_free( (lept_value*)lept_context_pop(c, sizeof(lept_value)) );
+    return ret;
 }
 
 // //parse null
