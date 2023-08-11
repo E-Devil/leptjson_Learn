@@ -23,7 +23,9 @@ enum {
 
     LEPT_PARSE_MISS_KEY,
     LEPT_PARSE_MISS_COLON,
-    LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET
+    LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET,
+
+    LEPT_STRINGIFY_OK
 };  // the return value of the first api
 
 // mem efficient way, v->n change to v->u.n or v->u.s/v->u.len
@@ -32,10 +34,10 @@ typedef struct lept_member lept_member;
 
 struct lept_value{
     union{
-        struct{ lept_member* m; size_t size; }o;
-        struct{ lept_value* e; size_t size; }a;
-        struct{ char* s; size_t len; }s;
-        double n;
+        struct{ lept_member* m; size_t size; }o;   //object
+        struct{ lept_value* e; size_t size; }a;    //array
+        struct{ char* s; size_t len; }s;           //string
+        double n;                                  //number
     }u;
     lept_type type;
 } ;
@@ -91,6 +93,7 @@ lept_value* lept_get_object_value(const lept_value* v, size_t index);
 #define LEPT_PARSE_STACK_INIT_SIZE 256
 #endif /*lept parse stack init size*/
 
+//parse
 static void* lept_context_push(lept_context* c, size_t size);
 static void* lept_context_pop(lept_context* c, size_t size);
 
@@ -104,6 +107,10 @@ static int lept_parse_literal(lept_context*c, lept_value* v, const char* literal
 static int lept_parse_array(lept_context*c, lept_value* v);
 static int lept_parse_object(lept_context* c, lept_value* v);
 
+//stringify
+static void lept_stringify_value(lept_context* c, const lept_value* v);
+static void lept_stringify_string(lept_context* c, const char* s, size_t len);
+char* lept_stringify(const lept_value* v, size_t* length);
 
 // parse json data to tree, so we nedd a node
 // typedef struct 

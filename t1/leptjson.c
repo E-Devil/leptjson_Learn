@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <error.h>
 #include <math.h>
@@ -49,8 +50,8 @@ static void* lept_context_push(lept_context* c, size_t size){
             c->size += c->size >> 1;    /* c->size * 1.5 */
         c->stack = (char*)realloc(c->stack, c->size);
     }
-    ret = c->stack + c->top;
-    c->top += size;
+    ret = c->stack + c->top;    // return [...^size...] ret is at ^
+    c->top += size;             // [...^size...top]
     return ret;
 }
 
@@ -337,8 +338,8 @@ static int lept_parse_string_raw(lept_context* c, char** str, size_t* len){
                         // c->top = head;
                         // return LEPT_PARSE_INVALID_STRING_ESCAPE;
                         STRING_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE);
-            }
-            break;
+                }
+                break;
             default:
                 if( (unsigned char)ch < 0x20 ){
                     c->top = head;
@@ -469,6 +470,97 @@ static int lept_parse_object(lept_context* c, lept_value* v){
     v->type = LEPT_NULL;
     return ret;
 }
+
+//stringify
+#ifndef LEPT_PARSE_STRINGIFY_INIT_SIZE
+#define LEPT_PARSE_STRINGIFY_INIT_SIZE 256
+#endif
+
+#define PUTS(c, s, len) memcpy(lept_context_push(c, len), s, len)
+
+static void lept_stringify_string(lept_context* c, const char* s, size_t len){
+    static const char hex_digits[] =  { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+    size_t i, size;
+    char* head, *p;
+    assert( s != NULL);
+    p = head = lept_context_push(c, size = len * 6 + 2);
+    *p++ = '"';
+    for(i = 0; i < len; i++){
+        unsigned char ch = (unsigned char)s[i];
+        switch(ch) {
+            case '\"': *p++ = '\\'; *p++ = '\"'; break;
+            case '\\': *p++ = '\\'; *p++ = '\\'; break;
+            case '\b': *p++ = '\\'; *p++ = 'b';  break;
+            case '\f': *p++ = '\\'; *p++ = 'f';  break;
+            case '\n': *p++ = '\\'; *p++ = 'n';  break;
+            case '\r': *p++ = '\\'; *p++ = 'r';  break;
+            case '\t': *p++ = '\\'; *p++ = 't';  break;
+            default:
+                if (ch < 0x20) {
+                    *p++ = '\\'; *p++ = 'u'; *p++ = '0'; *p++ = '0';
+                    *p++ = hex_digits[ch >> 4];
+                    *p++ = hex_digits[ch & 15];
+                }
+                else
+                    *p++ = s[i];
+        }
+    }
+    *p++ = '"';
+    c->top -= size - (p - head);
+}
+
+static void lept_stringify_value(lept_context* c, const lept_value* v){
+    size_t i;
+    switch (v->type){
+        case LEPT_NULL: PUTS(c, "null", 4); break;
+        case LEPT_FALSE: PUTS(c, "false", 5); break;
+        case LEPT_TRUE: PUTS(c, "true", 4); break;
+        case LEPT_NUMBER: {
+            c->top -= 32 - sprintf(lept_context_push(c, 32), "%.17g", v->u.n);
+            break;
+        }
+        case LEPT_STRING: {
+            lept_stringify_string(c, v->u.s.s, v->u.s.len);
+            break;
+        }
+        case LEPT_ARRAY: {
+            PUTC(c, '[');
+            for(i = 0; i < v->u.a.size; i++){
+                if(i > 0)
+                    PUTC(c, ',');
+                lept_stringify_value(c, &v->u.a.e[i]);
+            }
+            PUTC(c, ']');
+            break;
+        }
+        case LEPT_OBJECT: {
+            PUTC(c, '{');
+            for(i = 0; i < v->u.o.size; i++){
+                if(i > 0)
+                    PUTC(c, ',');
+                lept_stringify_string(c, v->u.o.m[i].k, v->u.o.m[i].klen);
+                PUTC(c, ':');
+                lept_stringify_value(c, &v->u.o.m[i].v);
+            }
+            PUTC(c, '}');
+            break;
+        }
+        default: assert(0 && "invalid type");
+    }
+}
+
+char* lept_stringify(const lept_value* v, size_t* length){
+    lept_context c;
+    assert(v != NULL);
+    c.stack = (char*)malloc(c.size = LEPT_PARSE_STRINGIFY_INIT_SIZE);
+    c.top = 0;
+    lept_stringify_value(&c, v);
+    if (length)
+        *length = c.top;
+    PUTC(&c, '\0');
+    return c.stack;
+}
+
 
 // //parse null
 // static int lept_parse_null(lept_context*c, lept_value* v){
