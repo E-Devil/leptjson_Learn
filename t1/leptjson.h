@@ -35,7 +35,7 @@ typedef struct lept_member lept_member;
 struct lept_value{
     union{
         struct{ lept_member* m; size_t size; }o;   //object
-        struct{ lept_value* e; size_t size; }a;    //array
+        struct{ lept_value* e; size_t size, capacity; }a;    //array
         struct{ char* s; size_t len; }s;           //string
         double n;                                  //number
     }u;
@@ -81,13 +81,32 @@ static void lept_encode_utf8(lept_context* c, unsigned u);
 
 //array
 size_t lept_get_array_size(const lept_value *v);
+size_t lept_get_array_capacity(const lept_value* v);
 lept_value* lept_get_array_element(const lept_value* v, size_t index);
+void lept_set_array(lept_value* v, size_t capacity);
+void lept_reserve_array(lept_value* v, size_t capacity);
+void lept_shrink_array(lept_value* v);
+//array-some operation
+lept_value* lept_pushback_array_element(lept_value* v);
+void lept_popback_array_element(lept_value* v);
+lept_value* lept_insert_array_element(lept_value* v, size_t index);
+void lept_erase_array_element(lept_value* v, size_t index, size_t count);
+void lept_clear_array(lept_value* v);
 
 //object
 size_t lept_get_object_size(const lept_value* v);
 const char* lept_get_object_key(const lept_value* v, size_t index);
 size_t lept_get_object_key_length(const lept_value* v, size_t index);
 lept_value* lept_get_object_value(const lept_value* v, size_t index);
+//dynamic object as like array
+void lept_set_object(lept_value* v, size_t capacity);
+size_t lept_get_object_capacity(const lept_value* v);
+//object-some operation
+void lept_reserve_object(lept_value* v, size_t capacity);
+void lept_shrink_object(lept_value* v);
+void lept_clear_object(lept_value* v);
+lept_value* lept_set_object_value(lept_value* v, const char* key, size_t klen);
+void lept_remove_object_value(lept_value* v, size_t index);
 
 #ifndef LEPT_PARSE_STACK_INIT_SIZE
 #define LEPT_PARSE_STACK_INIT_SIZE 256
@@ -111,6 +130,19 @@ static int lept_parse_object(lept_context* c, lept_value* v);
 static void lept_stringify_value(lept_context* c, const lept_value* v);
 static void lept_stringify_string(lept_context* c, const char* s, size_t len);
 char* lept_stringify(const lept_value* v, size_t* length);
+
+//query object
+size_t lept_find_object_index(const lept_value* v, const char* key, size_t klen);
+lept_value* lept_find_object_value(const lept_value* v, const char* key, size_t klen);
+
+//compare value
+int lept_is_equal(const lept_value* lhs, const lept_value* rhs);
+
+//copy move and swap
+void lept_copy(lept_value* dst, const lept_value* src);
+void lept_move(lept_value* dst, lept_value* src);
+void lept_swap(lept_value* lhs, lept_value* rhs);
+lept_value* lept_set_object_value(lept_value* v, const char* key, size_t klen);
 
 // parse json data to tree, so we nedd a node
 // typedef struct 
